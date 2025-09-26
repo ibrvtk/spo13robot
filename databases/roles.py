@@ -6,7 +6,7 @@ async def create():
     async with aiosqlite.connect('databases/roles.db') as db:
         await db.execute("""
             CREATE TABLE IF NOT EXISTS roles (
-                user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER PRIMARY KEY,
                 isModerator INTEGER,
                 isPublisher INTEGER,
                 isAdmin INTEGER,
