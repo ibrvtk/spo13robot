@@ -26,7 +26,8 @@ adminKeyboardAddChooseRole = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text="🪪 Администратор")]
 ],
 resize_keyboard=True,
-input_field_placeholder=f"{keyboardsPlaceholderTextChoose}")
+input_field_placeholder=f"{keyboardsPlaceholderTextChoose}",
+one_time_keyboard=True)
 
 
 async def adminKeyboardList():

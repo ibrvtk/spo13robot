@@ -1,4 +1,4 @@
-from config import bot, SUPERADMINS
+from config import SUPERADMINS
 
 import app.keyboards as kb
 
@@ -7,9 +7,7 @@ import aiosqlite
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import Message
-from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
-from aiogram.exceptions import TelegramBadRequest
 
 
 handlers = Router()
@@ -43,7 +41,7 @@ async def cmdStart(message: Message):
 
     if result != None:
         if result[0] == 1:
-            text += "🛡️ <b>У Вас есть права модератора</b> — /moderator\n"
+            text += "🛡️ <b>У Вас есть права модератора</b> — /moderate\n"
         if result[1] == 1:
             text += "📰 <b>У Вас есть права публикатора</b> — /publish\n"
         if result[2] == 1:
@@ -57,7 +55,7 @@ async def cmdStart(message: Message):
                 """, (user_id,))
                 await db.commit()
             text += "🪪 <b>У Вас есть права администратора</b> — /admin\n"
-            text += "🛡️ <b>У Вас есть права модератора</b> — /moderator\n"
+            text += "🛡️ <b>У Вас есть права модератора</b> — /moderate\n"
             text += "📰 <b>У Вас есть права публикатора</b> — /publish\n"
         else:
             text += "❓ <b>Вы неавторизированный пользователь</b> — /publish\n"
