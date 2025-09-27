@@ -12,6 +12,7 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 
 callbacks = Router()
@@ -217,7 +218,8 @@ async def cbAdminListActionsBack(callback: CallbackQuery):
 # callback F.data == "publishAdd"
 class fsmPublishAdd(StatesGroup):
     text = State()
-    multimedia = State()
+    mediafiles = State()
+    preview = State()
 
 @callbacks.callback_query(F.data == "publishAdd")
 async def cbPublishAdd(callback: CallbackQuery, state: FSMContext):
@@ -230,11 +232,26 @@ async def cbPublishAdd(callback: CallbackQuery, state: FSMContext):
 @callbacks.message(fsmPublishAdd.text)
 async def fsmPublishAddText(message: Message, state: FSMContext):
     await state.update_data(text=message.html_text)
-    await state.set_state(fsmPublishAdd.multimedia)
+    await state.set_state(fsmPublishAdd.mediafiles)
 
-    await message.answer("Теперь отправьте мультимедиа <i>(видео, фотографии, документы)</i>.\nОтправьте прочерк (-) для их отсутствия.")
+    await message.answer("Теперь отправьте медиафайл <i>(видео, фотографии, документы)</i>.\nМожно отправить до 10 медиафайлов "
+                         "<i>(не смешивайте разные типы медиафайлов: в одном посте должны быть только фото, только видео или только документы)</i>.",
+                         reply_markup=[[ReplyKeyboardMarkup(
+                             keyboard=[[KeyboardButton(text="Без медиафайлов")]],
+                             resize_keyboard=True,
+                             input_field_placeholder="Прикрепите медиафайлы...",
+                             one_time_keyboard=True
+                         )]])
 
-@callbacks.message(fsmPublishAdd.multimedia)
-async def fsmPublishAddMultimedia(message: Message, state: FSMContext):
+@callbacks.message(fsmPublishAdd.mediafiles)
+async def fsmPublishAddMediafiles(message: Message, state: FSMContext):
+    if message.text == "Без медиафайлов":
+        await state.update_data(mediafiles=None)
+        await state.set_state(fsmPublishAdd.preview)
+        return
+
     data = await state.get_data()
-    fsmText = data.get('text')
+    text = data.get('text')
+
+    mediafilesPinned = []
+    mediafilesType = ""
