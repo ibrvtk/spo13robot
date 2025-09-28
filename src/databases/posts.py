@@ -10,7 +10,7 @@ async def create():
                 post_id INTEGER,
                 text TEXT,
                 mediafiles TEXT,
-                channel_id INTEGER,
+                channel_id INTEGER
             )
         """)
         await db.commit()
