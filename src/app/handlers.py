@@ -14,7 +14,7 @@ handlers = Router()
 
 
 
-async def funcIsBanned(message: Message, user_id: int) -> bool: # Проверка человека на наличие у него бана.
+async def isBanned(message: Message, user_id: int) -> bool: # Проверка человека на наличие у него бана.
     async with aiosqlite.connect('databases/roles.db') as db:
         async with db.execute("SELECT isBanned FROM roles WHERE user_id = ?", (user_id,)) as cursor:
             result = await cursor.fetchone()
@@ -32,7 +32,7 @@ async def cmdStart(message: Message):
     user_id = message.from_user.id
     text = ""
 
-    if await funcIsBanned(message, user_id):
+    if await isBanned(message, user_id):
         return
     
     async with aiosqlite.connect('databases/roles.db') as db:
@@ -80,7 +80,7 @@ async def cmdCancel(message: Message, state: FSMContext):
 async def cmdAdmin(message: Message):
     user_id = message.from_user.id
 
-    if await funcIsBanned(message, user_id):
+    if await isBanned(message, user_id):
         return
     
     async with aiosqlite.connect('databases/roles.db') as db:
@@ -98,7 +98,7 @@ async def cmdAdmin(message: Message):
 async def cmdPublish(message: Message):
     user_id = message.from_user.id
 
-    if await funcIsBanned(message, user_id):
+    if await isBanned(message, user_id):
         return
 
     async with aiosqlite.connect('databases/roles.db') as db:

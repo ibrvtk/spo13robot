@@ -2,7 +2,6 @@ from config import bot
 
 from app.handlers import handlers
 from app.callbacks import callbacks
-from app.scheduler import scheduler
 
 import databases.roles as dbr
 import databases.posts as dbp
@@ -23,7 +22,6 @@ async def main():
     await dbr.create()
     await dbp.create()
 
-    asyncio.create_task(scheduler(bot))
     await dp.start_polling(bot)
 
 if __name__ == "__main__":

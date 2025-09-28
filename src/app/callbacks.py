@@ -3,20 +3,24 @@ from config import bot
 import app.keyboards as kb
 
 import databases.roles as dbr
-import databases.posts as dbp
+#import databases.posts as dbp
 
 import aiosqlite
 import time
 
 from aiogram import F, Router
-from aiogram.types import CallbackQuery, Message
-from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import (
+    CallbackQuery, Message,
+    ReplyKeyboardMarkup, KeyboardButton,
+    InputMediaPhoto, InputMediaVideo, InputMediaDocument
+)
 from aiogram.fsm.context import FSMContext
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.fsm.state import State, StatesGroup
 
 
 callbacks = Router()
 mediafilesPinned = {}
+post_id_count = 0
 fsmPlaceholderTextRetry = "\nПопробуйте снова или отмените действие (/cancel)."
 
 
@@ -217,7 +221,7 @@ async def cbAdminListActionsBack(callback: CallbackQuery):
 
 # /publish
 # callback F.data == "publishAdd"
-def timeoutCleanup():
+async def timeoutCleanup():
     currentTime = time.time()
     for user_id, data in list(mediafilesPinned.items()):
         if currentTime > data['timeout']:
@@ -261,17 +265,19 @@ async def fsmPublishAddText(message: Message, state: FSMContext):
 @callbacks.message(fsmPublishAdd.mediafiles)
 async def fsmPublishAddMediafiles(message: Message, state: FSMContext):
     user_id = message.from_user.id
-    fsmPlaceholderTextMediafileError = "<b>Один или несколько медиафайлов не соответствуют остальным и не будут добавлены.</b>"
+    fsmPlaceholderTextMediafileTypeWrong = "<b>Один или несколько медиафайлов не соответствуют остальным и не будут добавлены.</b>"
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="Готово")]],
+        resize_keyboard=True, 
+        one_time_keyboard=True
+    )
 
-    timeoutCleanup()
+    await timeoutCleanup()
 
     if message.text == "Без медиафайлов":
         await state.update_data(mediafiles=None)
         await state.set_state(fsmPublishAdd.preview)
         return
-
-    data = await state.get_data()
-    text = data.get('text')
 
     if message.photo:
         if mediafilesPinned[user_id]['mediafilesType'] in ["None", "photo"] and mediafilesPinned[user_id]['mediafilesCount'] < 10:
@@ -279,9 +285,10 @@ async def fsmPublishAddMediafiles(message: Message, state: FSMContext):
             mediafilesPinned[user_id]['mediafiles_id'].append(message.photo[-1].file_id)
             mediafilesPinned[user_id]['mediafilesCount'] += 1
             mediafilesPinned[user_id]['timeout'] = time.time() + 300
-            await message.reply("✅")
+            await message.reply("✅",
+                                reply_markup=keyboard)
         else:
-            await message.reply(fsmPlaceholderTextMediafileError)
+            await message.reply(fsmPlaceholderTextMediafileTypeWrong)
             
     elif message.video:
         if mediafilesPinned[user_id]['mediafilesType'] in ["None", "video"] and mediafilesPinned[user_id]['mediafilesCount'] < 10:
@@ -289,9 +296,10 @@ async def fsmPublishAddMediafiles(message: Message, state: FSMContext):
             mediafilesPinned[user_id]['mediafiles_id'].append(message.video.file_id)
             mediafilesPinned[user_id]['mediafilesCount'] += 1
             mediafilesPinned[user_id]['timeout'] = time.time() + 300
-            await message.reply("✅")
+            await message.reply("✅",
+                                reply_markup=keyboard)
         else:
-            await message.reply(fsmPlaceholderTextMediafileError)
+            await message.reply(fsmPlaceholderTextMediafileTypeWrong)
 
     elif message.document:
         if mediafilesPinned[user_id]['mediafilesType'] in ["None", "document"] and mediafilesPinned[user_id]['mediafilesCount'] < 10:
@@ -299,6 +307,70 @@ async def fsmPublishAddMediafiles(message: Message, state: FSMContext):
             mediafilesPinned[user_id]['mediafiles_id'].append(message.document.file_id)
             mediafilesPinned[user_id]['mediafilesCount'] += 1
             mediafilesPinned[user_id]['timeout'] = time.time() + 300
-            await message.reply("✅")
+            await message.reply("✅",
+                                reply_markup=keyboard)
         else:
-            await message.reply(fsmPlaceholderTextMediafileError)
+            await message.reply(fsmPlaceholderTextMediafileTypeWrong)
+
+@callbacks.message(F.text == "Готово")
+async def textDone(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+
+    if mediafilesPinned[user_id]['mediafilesType'] != "None":
+        await timeoutCleanup()
+        await state.update_data(mediafiles=mediafilesPinned[user_id]['mediafiles_id'])
+        await state.set_state(fsmPublishAdd.preview)
+        return
+    
+@callbacks.message(fsmPublishAdd.preview)
+async def fsmPublishAddPreview(message: Message, state: FSMContext):
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="✅ Принять"), KeyboardButton(text="📝 Изменить"), KeyboardButton(text="❌ Отмена")]],
+        resize_keyboard=True, 
+        one_time_keyboard=True
+    )
+
+    data = await state.get_data()
+    text = data.get('text')
+
+    mediafiles = data.get('mediafiles', [])
+    mediafilesType = data.get('mediafilesType', "None")
+
+    if mediafiles and mediafilesType != "None":
+        mediafilesGroup = []
+        
+        for i, file_id in enumerate(mediafiles): # enumerate подсказала ИИ
+            if mediafilesType == "photo":
+                if i == 0: mediafilesGroup.append(InputMediaPhoto(media=file_id, caption=text, parse_mode='HTML'))
+                else: mediafilesGroup.append(InputMediaPhoto(media=file_id))
+            
+            elif mediafilesType == "video":
+                if i == 0: mediafilesGroup.append(InputMediaVideo(media=file_id, caption=text, parse_mode='HTML'))
+                else: mediafilesGroup.append(InputMediaVideo(media=file_id))
+            
+            elif mediafilesType == "document":
+                if i == 0: mediafilesGroup.append(InputMediaDocument(media=file_id, caption=text, parse_mode='HTML'))
+                else: mediafilesGroup.append(InputMediaDocument(media=file_id))
+
+        await message.answer_media_group(mediafilesGroup,
+                                         reply_markup=keyboard)
+    
+    else:
+        await message.answer(text, parse_mode='HTML', reply_markup=keyboard)
+
+@callbacks.message((F.text == "✅ Принять") | (F.text == "❌ Отмена"))
+async def textApplyOrCancel(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+
+    if message.text == "✅ Принять":
+        data = await state.get_data()
+        text = data.get('text')
+        mediafiles = data.get('mediafiles', [])
+        
+        post_id_count += 1
+
+    elif message.text == "❌ Отмена":
+        del mediafilesPinned[user_id]
+        await state.clear()
+        await message.answer("✅ <b>Предложение поста отменено.</b>",
+                             reply_markup=None)
