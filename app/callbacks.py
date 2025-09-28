@@ -6,7 +6,7 @@ import databases.roles as dbr
 import databases.posts as dbp
 
 import aiosqlite
-from datetime import datetime
+import time
 
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
@@ -16,6 +16,7 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 
 callbacks = Router()
+mediafilesPinned = {}
 fsmPlaceholderTextRetry = "\nПопробуйте снова или отмените действие (/cancel)."
 
 
@@ -216,6 +217,12 @@ async def cbAdminListActionsBack(callback: CallbackQuery):
 
 # /publish
 # callback F.data == "publishAdd"
+def timeoutCleanup():
+    currentTime = time.time()
+    for user_id, data in list(mediafilesPinned.items()):
+        if currentTime > data['timeout']:
+            del mediafilesPinned[user_id]
+
 class fsmPublishAdd(StatesGroup):
     text = State()
     mediafiles = State()
@@ -223,6 +230,14 @@ class fsmPublishAdd(StatesGroup):
 
 @callbacks.callback_query(F.data == "publishAdd")
 async def cbPublishAdd(callback: CallbackQuery, state: FSMContext):
+    mediafilesPinned[callback.from_user.id] = {
+        'user_id': callback.from_user.id,
+        'mediafilesType': "None",
+        'mediafiles_id': [],
+        'mediafilesCount': 0,
+        'timeout': time.time() + 300
+    }
+
     await state.set_state(fsmPublishAdd.text)
 
     await callback.message.edit_text("<b>Сейчас нужно будет написать содержание поста и, опционально, прикрепить мультимедиа.</b>\n"
@@ -245,6 +260,11 @@ async def fsmPublishAddText(message: Message, state: FSMContext):
 
 @callbacks.message(fsmPublishAdd.mediafiles)
 async def fsmPublishAddMediafiles(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    fsmPlaceholderTextMediafileError = "<b>Один или несколько медиафайлов не соответствуют остальным и не будут добавлены.</b>"
+
+    timeoutCleanup()
+
     if message.text == "Без медиафайлов":
         await state.update_data(mediafiles=None)
         await state.set_state(fsmPublishAdd.preview)
@@ -253,5 +273,32 @@ async def fsmPublishAddMediafiles(message: Message, state: FSMContext):
     data = await state.get_data()
     text = data.get('text')
 
-    mediafilesPinned = []
-    mediafilesType = ""
+    if message.photo:
+        if mediafilesPinned[user_id]['mediafilesType'] in ["None", "photo"] and mediafilesPinned[user_id]['mediafilesCount'] < 10:
+            mediafilesPinned[user_id]['mediafilesType'] = "photo"
+            mediafilesPinned[user_id]['mediafiles_id'].append(message.photo[-1].file_id)
+            mediafilesPinned[user_id]['mediafilesCount'] += 1
+            mediafilesPinned[user_id]['timeout'] = time.time() + 300
+            await message.reply("✅")
+        else:
+            await message.reply(fsmPlaceholderTextMediafileError)
+            
+    elif message.video:
+        if mediafilesPinned[user_id]['mediafilesType'] in ["None", "video"] and mediafilesPinned[user_id]['mediafilesCount'] < 10:
+            mediafilesPinned[user_id]['mediafilesType'] = "video"
+            mediafilesPinned[user_id]['mediafiles_id'].append(message.video.file_id)
+            mediafilesPinned[user_id]['mediafilesCount'] += 1
+            mediafilesPinned[user_id]['timeout'] = time.time() + 300
+            await message.reply("✅")
+        else:
+            await message.reply(fsmPlaceholderTextMediafileError)
+
+    elif message.document:
+        if mediafilesPinned[user_id]['mediafilesType'] in ["None", "document"] and mediafilesPinned[user_id]['mediafilesCount'] < 10:
+            mediafilesPinned[user_id]['mediafilesType'] = "document"
+            mediafilesPinned[user_id]['mediafiles_id'].append(message.document.file_id)
+            mediafilesPinned[user_id]['mediafilesCount'] += 1
+            mediafilesPinned[user_id]['timeout'] = time.time() + 300
+            await message.reply("✅")
+        else:
+            await message.reply(fsmPlaceholderTextMediafileError)
